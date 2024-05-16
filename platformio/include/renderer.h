@@ -76,9 +76,9 @@ void drawCurrentConditions(const owm_current_t &current,
                            owm_hourly_t *const hourly,
                            const owm_resp_air_pollution_t &owm_air_pollution,
                            float inTemp, float inHumidity);
-void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall &s);
+void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall *s);
 void drawForecast(owm_daily_t *const daily, tm timeInfo);
-void drawForecastTopBar(compressed_owm_resp_onecall_t &s, tm timeInfo);
+void drawForecastTopBar(compressed_owm_resp_onecall_t *s, tm timeInfo);
 void drawAlerts(std::vector<owm_alerts_t> &alerts,
                 const String &city, const String &date);
 void drawCurrentTime(tm timeInfo);

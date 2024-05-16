@@ -319,8 +319,8 @@ void setup()
 
   do
   {
-    drawCurrentConditionsTopBar(*dataManager.getOpenWeatherMapData());
-    drawForecastTopBar(*dataManager.getOpenWeatherMapData(), timeInfo);
+    drawCurrentConditionsTopBar(dataManager.getOpenWeatherMapData());
+    drawForecastTopBar(dataManager.getOpenWeatherMapData(), timeInfo);
     drawLocationDate(CITY_STRING, dateStr);
     drawCurrentTime(timeInfo);
     

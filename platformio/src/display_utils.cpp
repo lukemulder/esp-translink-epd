@@ -756,8 +756,39 @@ const uint8_t *getForecastBitmap64(const owm_daily_t &daily)
  *   https://www.weather.gov/ajk/ForecastTerms
  */
 const uint8_t *getCurrentConditionsBitmap196(const owm_current_t &current,
-                                             const owm_daily_t   &today)
+                                             const owm_daily_t   &today,
+                                             owm_hourly_t *const hourly)
 {
+  // Calculate the likely precipitation until the end of day
+  float total_precip_eod = 0.0;
+  int prev_hour = 0;
+  for (int i = 0; i < HOURLY_GRAPH_MAX; ++i)
+  {
+    char timeBuffer[12] = {}; // big enough to accommodate "hh:mm:ss am"
+    time_t ts = hourly[i].dt;
+    tm *timeInfo = localtime(&ts);
+
+    // Use strftime to format the time as 24-hour hour only
+    strftime(timeBuffer, sizeof(timeBuffer), "%H", timeInfo);
+    
+    // Convert the formatted hour string to an integer
+    char* end;
+    int hour = strtoimax(timeBuffer, &end, 10); // base 10 for decimal
+
+    // Check if it is midnight (00 hours)
+    if (hour == 0 && prev_hour == 23)
+      break;
+    else
+      prev_hour = hour;
+
+    if(hourly[i].pop > UMBRELLA_WARNING_PRECIP_LIKELY)
+      total_precip_eod += hourly[i].rain_1h;
+  }
+  // if total precipitation for the rest of the day is above threshold
+  // alert user to using umbrella
+  if(total_precip_eod > UMBRELLA_WARNING_PRECIP_THRESH)
+    return umbrella_icon_196x196;
+
   int id = current.weather.id;
   // OpenWeatherMap indicates sun is up with d otherwise n for night
   bool day = current.weather.icon.endsWith("d");

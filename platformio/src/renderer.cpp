@@ -737,25 +737,25 @@ void drawCurrentConditions(const owm_current_t &current,
 /* This function is responsible for drawing the current conditions and
  * associated icons on the top bar when Translink API is enabled
  */
-void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall &s)
+void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall *s)
 {
   String dataStr, unitStr;
   // current weather icon
   display.drawInvertedBitmap(0, 0,
-                             s.current_conditions_bitmap_196,
+                             s->current_conditions_bitmap_196,
                              196, 196, GxEPD_BLACK);
 
   // current temp
 #ifdef UNITS_TEMP_KELVIN
-  dataStr = String(static_cast<int>(round(current.temp)));
+  dataStr = String(static_cast<int>(round(s->current.temp)));
   unitStr = TXT_UNITS_TEMP_KELVIN;
 #endif
 #ifdef UNITS_TEMP_CELSIUS
-  dataStr = String(static_cast<int>(round(kelvin_to_celsius(s.current_temp))));
+  dataStr = String(static_cast<int>(round(kelvin_to_celsius(s->current_temp))));
   unitStr = TXT_UNITS_TEMP_CELSIUS;
 #endif
 #ifdef UNITS_TEMP_FAHRENHEIT
-  dataStr = String(static_cast<int>(round(kelvin_to_fahrenheit(s.current_temp))));
+  dataStr = String(static_cast<int>(round(kelvin_to_fahrenheit(s->current_temp))));
   unitStr = TXT_UNITS_TEMP_FAHRENHEIT;
 #endif
   // FONT_**_temperature fonts only have the character set used for displaying
@@ -772,18 +772,18 @@ void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall &s)
   // current feels like
 #ifdef UNITS_TEMP_KELVIN
   dataStr = String(TXT_FEELS_LIKE) + ' '
-            + String(static_cast<int>(round(current.feels_like)));
+            + String(static_cast<int>(round(s->current.feels_like)));
 #endif
 #ifdef UNITS_TEMP_CELSIUS
   dataStr = String(TXT_FEELS_LIKE) + ' '
             + String(static_cast<int>(round(
-                     kelvin_to_celsius(s.current_feels_like))))
+                     kelvin_to_celsius(s->current_feels_like))))
             + '\xB0';
 #endif
 #ifdef UNITS_TEMP_FAHRENHEIT
   dataStr = String(TXT_FEELS_LIKE) + ' '
             + String(static_cast<int>(round(
-                     kelvin_to_fahrenheit(current.feels_like))))
+                     kelvin_to_fahrenheit(s->current.feels_like))))
             + '\xB0';
 #endif
   display.setFont(&FONT_12pt8b);
@@ -849,7 +849,7 @@ void drawForecast(owm_daily_t *const daily, tm timeInfo)
 /* This function is responsible for drawing the three day forecast
  * for the top bar when Translink API enabled
  */
-void drawForecastTopBar(compressed_owm_resp_onecall_t &s, tm timeInfo)
+void drawForecastTopBar(compressed_owm_resp_onecall_t *s, tm timeInfo)
 {
   // 3 day, forecast
   String hiStr, loStr;
@@ -862,7 +862,7 @@ void drawForecastTopBar(compressed_owm_resp_onecall_t &s, tm timeInfo)
 #endif
     // icons
     display.drawInvertedBitmap(x, 48 + 69 / 2 - 32 - 6,
-                               s.daily[i].forecast_bitmap_64,
+                               s->daily[i].forecast_bitmap_64,
                                64, 64, GxEPD_BLACK);
     // day of week label
     display.setFont(&FONT_11pt8b);
@@ -875,19 +875,19 @@ void drawForecastTopBar(compressed_owm_resp_onecall_t &s, tm timeInfo)
     display.setFont(&FONT_8pt8b);
     drawString(x + 31, 48 + 69 / 2 + 38 - 6 + 12, "|", CENTER);
 #ifdef UNITS_TEMP_KELVIN
-  hiStr = String(static_cast<int>(round(daily[i].temp.max)));
-  loStr = String(static_cast<int>(round(daily[i].temp.min)));
+  hiStr = String(static_cast<int>(round(s->daily[i].temp.max)));
+  loStr = String(static_cast<int>(round(s->daily[i].temp.min)));
 #endif
 #ifdef UNITS_TEMP_CELSIUS
-  hiStr = String(static_cast<int>(round(kelvin_to_celsius(s.daily[i].temp_max)
+  hiStr = String(static_cast<int>(round(kelvin_to_celsius(s->daily[i].temp_max)
                  ))) + "\xB0";
-  loStr = String(static_cast<int>(round(kelvin_to_celsius(s.daily[i].temp_min)
+  loStr = String(static_cast<int>(round(kelvin_to_celsius(s->daily[i].temp_min)
                  ))) + "\xB0";
 #endif
 #ifdef UNITS_TEMP_FAHRENHEIT
-  hiStr = String(static_cast<int>(round(kelvin_to_fahrenheit(daily[i].temp.max)
+  hiStr = String(static_cast<int>(round(kelvin_to_fahrenheit(s->daily[i].temp.max)
                  ))) + "\xB0";
-  loStr = String(static_cast<int>(round(kelvin_to_fahrenheit(daily[i].temp.min)
+  loStr = String(static_cast<int>(round(kelvin_to_fahrenheit(s->daily[i].temp.min)
                  ))) + "\xB0";
 #endif
     drawString(x + 31 - 4, 48 + 69 / 2 + 38 - 6 + 12, hiStr, RIGHT);
