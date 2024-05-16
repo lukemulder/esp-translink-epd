@@ -22,6 +22,22 @@
 RTC_DATA_ATTR compressed_owm_resp_onecall_t  comp_owm_onecall = {0};
 RTC_DATA_ATTR compressed_tl_resp_rtti_t      comp_translink_rtti_schedules[TRANSLINK_BUSES_DISPLAYED] = {0};
 
+void clearRTCMemorySpace()
+{
+  for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
+  {
+    comp_translink_rtti_schedules[i].valid_schedules = 0;
+    for(int j = 0; j < RTTI_NUM_SCHEDULES; j++)
+    {
+      comp_translink_rtti_schedules[i].schedules[j].tm_yday = 0;
+      comp_translink_rtti_schedules[i].schedules[j].expected_countdown = 0;
+
+      memset(comp_translink_rtti_schedules[i].schedules[j].expected_leave_time, 0, sizeof(comp_translink_rtti_schedules[i].schedules[j].expected_leave_time));
+      comp_translink_rtti_schedules[i].schedules[j].schedule_status = 0;
+    }
+  }
+}
+
 void DataManager::init(tm* currentTime, bool firstBoot)
 {
   // MAKE API REQUESTS
@@ -50,6 +66,8 @@ void DataManager::init(tm* currentTime, bool firstBoot)
         {
             comp_translink_rtti_schedules[i].valid_schedules = 0;
         }
+
+        clearRTCMemorySpace();
     }
     else
     {
@@ -83,7 +101,7 @@ void DataManager::addDateStampTranslinkSchedule(compressed_tl_resp_rtti_t &s)
 {
   int numberDaysInDay = (isLeapYear(currentTime.tm_year)) ? 366 - 1 : 365 - 1;
 
-  for(int i = 0; i < s.valid_schedules; i++)
+  for(int i = 0; i < RTTI_NUM_SCHEDULES; i++)
   {
     tm arrivalTime = busScheduleEntryTo24TM(s.schedules[i].expected_leave_time, 0);
 
@@ -230,9 +248,10 @@ tm DataManager::busScheduleEntryTo24TM(char s[MAX_EXPECTED_LEAVE_STR_SIZE], int 
 
 bool busScheduleEntryExpired(tm &arrivalTime, tm &currentTime, int busRunTime)
 {
-  return (arrivalTime.tm_yday == currentTime.tm_yday + 1 % 365 ||
-         (arrivalTime.tm_yday == currentTime.tm_yday && arrivalTime.tm_hour > currentTime.tm_hour) ||
-         (arrivalTime.tm_yday == currentTime.tm_yday && arrivalTime.tm_hour == currentTime.tm_hour && arrivalTime.tm_min > currentTime.tm_min + busRunTime + 1));
+  bool validSchedule = (arrivalTime.tm_yday == (currentTime.tm_yday + 1 % 365) ||
+                       (arrivalTime.tm_yday == currentTime.tm_yday && arrivalTime.tm_hour > currentTime.tm_hour) ||
+                       (arrivalTime.tm_yday == currentTime.tm_yday && arrivalTime.tm_hour == currentTime.tm_hour && (arrivalTime.tm_min > currentTime.tm_min + busRunTime + 1)));
+  return !validSchedule;
 }
 
 int busScheduleCountdownMin(tm& arrivalTime, tm& currentTime)
@@ -246,7 +265,7 @@ int busScheduleCountdownMin(tm& arrivalTime, tm& currentTime)
   }
   else
   {
-    mins = ((arrivalTime.tm_hour - arrivalTime.tm_hour) * 60) + 
+    mins = ((arrivalTime.tm_hour - currentTime.tm_hour) * 60) + 
            (arrivalTime.tm_min - currentTime.tm_min - 1);
   }
 
@@ -269,6 +288,8 @@ void DataManager::processTranslinkSchedules()
     for(int schedule = 0; schedule < RTTI_NUM_SCHEDULES && schedule < comp_translink_rtti_schedules[bus].valid_schedules; schedule++)
     {
       arrivalTime = busScheduleEntryTo24TM(comp_translink_rtti_schedules[bus].schedules[schedule].expected_leave_time, comp_translink_rtti_schedules[bus].schedules[schedule].tm_yday);
+
+      Serial.println(comp_translink_rtti_schedules[bus].schedules[schedule].expected_leave_time);
 
       if(isTimeValid(arrivalTime))
       {
