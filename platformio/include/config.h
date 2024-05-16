@@ -59,7 +59,6 @@
 //   English (United States)         en_US
 //   French (France)                 fr_FR
 //   Dutch (Belgium)                 nl_BE
-//   Portuguese (Brazil)             pt_BR
 #define LOCALE en_US
 
 // UNITS
@@ -70,15 +69,15 @@
 //   Imperial : Fahrenheit
 // #define UNITS_TEMP_KELVIN
 // #define UNITS_TEMP_CELSIUS
-#define UNITS_TEMP_FAHRENHEIT
+#define UNITS_TEMP_CELSIUS
 
 // UNITS - WIND SPEED
 //   Metric   : Kilometers per Hour
 //   Imperial : Miles per Hour
 // #define UNITS_SPEED_METERSPERSECOND
 // #define UNITS_SPEED_FEETPERSECOND
-// #define UNITS_SPEED_KILOMETERSPERHOUR
-#define UNITS_SPEED_MILESPERHOUR
+#define UNITS_SPEED_KILOMETERSPERHOUR
+// #define UNITS_SPEED_MILESPERHOUR
 // #define UNITS_SPEED_KNOTS
 // #define UNITS_SPEED_BEAUFORT
 
@@ -87,8 +86,8 @@
 //   Imperial : Inches of Mercury
 // #define UNITS_PRES_HECTOPASCALS
 // #define UNITS_PRES_PASCALS
-// #define UNITS_PRES_MILLIMETERSOFMERCURY
-#define UNITS_PRES_INCHESOFMERCURY
+#define UNITS_PRES_MILLIMETERSOFMERCURY
+// #define UNITS_PRES_INCHESOFMERCURY
 // #define UNITS_PRES_MILLIBARS
 // #define UNITS_PRES_ATMOSPHERES
 // #define UNITS_PRES_GRAMSPERSQUARECENTIMETER
@@ -97,16 +96,16 @@
 // UNITS - VISIBILITY DISTANCE
 //   Metric   : Kilometers
 //   Imperial : Miles
-// #define UNITS_DIST_KILOMETERS
-#define UNITS_DIST_MILES
+#define UNITS_DIST_KILOMETERS
+// #define UNITS_DIST_MILES
 
 // UNITS - PRECIPITATION
 // Measure of precipitation.
 // This can either be Probability of Precipitation (PoP) or hourly volume.
 //   Metric   : Millimeters
 //   Imperial : Inches
-#define UNITS_PRECIP_POP
-// #define UNITS_PRECIP_MILLIMETERS
+// #define UNITS_PRECIP_POP
+#define UNITS_PRECIP_MILLIMETERS
 // #define UNITS_PRECIP_CENTIMETERS
 // #define UNITS_PRECIP_INCHES
 
@@ -120,7 +119,7 @@
 //   HONG_KONG_AQHI       INDIA_AQI            MAINLAND_CHINA_AQI
 //   SINGAPORE_PSI        SOUTH_KOREA_CAI      UNITED_KINGDOM_DAQI
 //   UNITED_STATES_AQI
-#define UNITED_STATES_AQI
+#define CANADA_AQHI
 
 // Hypertext Transfer Protocol (HTTP)
 // HTTP
@@ -146,7 +145,7 @@
 // #define USE_HTTPS_WITH_CERT_VERIF
 
 // WIND DIRECTION INDICATOR
-// Choose whether the wind direction indicator should be an arrow, number, or
+// Choose whether the wind direction indicator should be an arrow, number, or 
 // expressed in Compass Point Notation (CPN).
 // The arrow indicator can be combined with NUMBER or CPN.
 //
@@ -183,6 +182,22 @@
 #define WIND_ICONS_SECONDARY_INTERCARDINAL
 // #define WIND_ICONS_TERTIARY_INTERCARDINAL
 // #define WIND_ICONS_360
+
+// TRANSLINK BUSES
+#define TRANSLINK_BUSES_DISPLAYED 3
+
+struct BusInfo {
+    String stop_num;
+    String route_name;
+    int walk_time;
+    int run_time;
+};
+
+extern const BusInfo translink_bus_info[];
+
+// UMBRELLA REMINDER THRESHOLD
+extern const float UMBRELLA_WARNING_PRECIP_THRESH;
+extern const float UMBRELLA_WARNING_PRECIP_LIKELY;
 
 // FONTS
 // A handful of popular Open Source typefaces have been included with this
@@ -265,6 +280,8 @@ extern const unsigned long WIFI_TIMEOUT;
 extern const String OWM_APIKEY;
 extern const String OWM_ENDPOINT;
 extern const String OWM_ONECALL_VERSION;
+extern const String TRANSLINK_APIKEY;
+extern const String TRANSLINK_ENDPOINT;
 extern const String LAT;
 extern const String LON;
 extern const String CITY_STRING;
@@ -276,6 +293,8 @@ extern const char *REFRESH_TIME_FORMAT;
 extern const char *NTP_SERVER_1;
 extern const char *NTP_SERVER_2;
 extern const unsigned long NTP_TIMEOUT;
+extern const long SLEEP_DURATION_OWM;
+extern const long SLEEP_DURATION_TRANSLINK;
 extern const long SLEEP_DURATION;
 extern const int BED_TIME;
 extern const int WAKE_TIME;

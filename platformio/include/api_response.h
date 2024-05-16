@@ -31,6 +31,9 @@
 #define OWM_NUM_ALERTS         8 // OpenWeatherMaps does not specify a limit, but if you need more alerts you are probably doomed.
 #define OWM_NUM_AIR_POLLUTION 24 // Depending on AQI scale, hourly concentrations will need to be averaged over a period of 1h to 24h
 
+#define RTTI_NUM_SCHEDULES    10
+#define RTTI_TIMEFRAME_MIN   120
+
 typedef struct owm_weather
 {
   int     id;               // Weather condition id
@@ -180,6 +183,77 @@ typedef struct owm_resp_onecall
 } owm_resp_onecall_t;
 
 /*
+ * Daily forecast weather data API response
+ */
+typedef struct compressed_owm_daily
+{
+  int64_t               dt;               // Time of the forecasted data, unix, UTC
+  float                 temp_max;
+  float                 temp_min;
+  const uint8_t*        forecast_bitmap_64;
+} compressed_owm_daily_t;
+
+typedef struct compressed_owm_resp_onecall
+{
+  int64_t current_dt;               // Current time, Unix, UTC
+  float   current_temp;             // Temperature. Units - default: kelvin, metric: Celsius, imperial: Fahrenheit.
+  float   current_feels_like;       // Temperature. This temperature parameter accounts for the human perception of weather. Units – default: kelvin, metric: Celsius, imperial: Fahrenheit.
+
+  const uint8_t* current_conditions_bitmap_196;
+
+  compressed_owm_daily_t daily[OWM_NUM_DAILY];
+} compressed_owm_resp_onecall_t;
+
+/*
+ * Schedule entry for each bus in an RTTI call
+ */
+typedef struct rtti_schedule
+{
+  String expected_leave_time;  // Expected arrival time for bus (ex. 2:14pm) 
+  int    expected_countdown;   // Expected number of minutes till arrival (ex. 10)
+  String schedule_status;      // Early or late status (ex. "+" means running early)
+  String cancelled_trip;
+  String last_update;
+} rtti_schedule_t;
+
+/*
+ * Response from Translinks's RTTI API
+ *
+ * https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/rtti
+ */
+typedef struct translink_resp_rtti
+{
+  int     stop_num;          // Stop number of the bus stop being polled (ex. 50769)
+  String  bus_route;         // Bus route being polled (ex. 010)
+
+  String  bus_route_name;    // Name of the bus route being polled (ex. GRANVILLE/WATERFRONT STN)
+  String  bus_dir;           // Direction the bus route is travelling
+  rtti_schedule_t schedules[RTTI_NUM_SCHEDULES]; 
+} translink_resp_rtti_t;
+
+#define MAX_BUS_ROUTE_STR_SIZE 4 // "010" plus null terminator
+#define MAX_BUS_DIR_STR_SIZE 2   // "N", "S", "W", or "E" plus null terminator 
+
+#define MAX_EXPECTED_LEAVE_STR_SIZE 8 // "12:00pm" plus null terminator
+
+typedef struct compressed_rtti_schedule
+{
+  char  expected_leave_time[MAX_EXPECTED_LEAVE_STR_SIZE]; // Expected arrival time for bus (ex. 2:14pm) 
+  int   expected_countdown;                               // Expected number of minutes till arrival (ex. 10)
+  char  schedule_status;                                  // Early or late status (ex. "+" means running early)
+} compressed_rtti_schedule_t;  
+
+typedef struct compressed_tl_resp_rtti
+{
+  int     day;
+  int     stop_num;
+  char    bus_route[MAX_BUS_ROUTE_STR_SIZE]; // Bus route being polled (ex. 010)
+  char    bus_dir[MAX_BUS_DIR_STR_SIZE];     // Direction the bus route is travelling
+  uint8_t valid_schedules;
+  compressed_rtti_schedule_t schedules[RTTI_NUM_SCHEDULES]; 
+} compressed_tl_resp_rtti_t;
+
+/*
  * Coordinates from the specified location (latitude, longitude)
  */
 typedef struct owm_coord
@@ -212,9 +286,11 @@ typedef struct owm_resp_air_pollution
 } owm_resp_air_pollution_t;
 
 DeserializationError deserializeOneCall(WiFiClient &json,
-                                        owm_resp_onecall_t &r);
+                                        compressed_owm_resp_onecall_t &r);
 DeserializationError deserializeAirQuality(WiFiClient &json,
                                            owm_resp_air_pollution_t &r);
+DeserializationError deserializeTranslinkRTTI(WiFiClient &json,
+                                           compressed_tl_resp_rtti_t &r);
 
 
 #endif

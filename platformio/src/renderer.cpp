@@ -259,18 +259,111 @@ void powerOffDisplay()
   return;
 } // end initDisplay
 
+/* Translink schedule status string helper function
+ */
+String getTLScheduleStatusString(char status)
+{
+  String lateness;
+
+  if(status == '*' || status == ' ')
+  {
+    lateness = "(on time)";
+  }
+  else if(status == '-')
+  {
+    lateness = "(late)";
+  }
+  else
+  {
+    lateness = "(early)";
+  }
+
+  return lateness;
+}
+
+/* This function is responsible for drawing the bus schedules and
+ * associated icons.
+ */
+void drawBusSchedules(compressed_tl_resp_rtti_t* r)
+{
+    // Draw bus icons
+  display.drawInvertedBitmap(45 + (96 + 150) * 0, 194 + 10,
+                             translink_bus_96x96, 96, 96, GxEPD_BLACK);
+  display.drawInvertedBitmap(45 + (96 + 150) * 1, 194 + 10,
+                             translink_bus_96x96, 96, 96, GxEPD_BLACK);
+  display.drawInvertedBitmap(45 + (96 + 150) * 2, 194 + 10,
+                             translink_bus_96x96, 96, 96, GxEPD_BLACK);
+  // Draw bus number and direction in icons
+  for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
+  {
+      // bus name
+      display.setFont(&FONT_14pt8b);
+      drawString(78 + (96 + 150) * i, 230 + 10, r[i].bus_route, CENTER);
+      // bus direction
+      String dir(r[i].bus_dir[0]);
+      display.setFont(&FONT_16pt8b);
+      drawString(18 + 96 + (96 + 150) * i, 205 + 10, dir, LEFT);
+  }
+    // Draw walking icons
+  display.drawInvertedBitmap(145 + (96 + 150) * 0, 213 + 10,
+                             walking_icon_48x48, 48, 48, GxEPD_BLACK);
+  display.drawInvertedBitmap(145 + (96 + 150) * 1, 213 + 10,
+                             walking_icon_48x48, 48, 48, GxEPD_BLACK);
+  display.drawInvertedBitmap(145 + (96 + 150) * 2, 213 + 10,
+                             walking_icon_48x48, 48, 48, GxEPD_BLACK);
+  // Draw walk times for each bus stop
+  for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
+  {
+      display.setFont(&FONT_8pt8b);
+      drawString(145 + 12 + (96 + 150) * i, 213 + 48 + 12 + 10, String(translink_bus_info[i].walk_time) + "min", CENTER);
+  }
+    // Draw running icons
+  display.drawInvertedBitmap(184 + (96 + 150) * 0, 213 + 10,
+                             running_icon_48x48, 48, 48, GxEPD_BLACK);
+  display.drawInvertedBitmap(184 + (96 + 150) * 1, 213 + 10,
+                             running_icon_48x48, 48, 48, GxEPD_BLACK);
+  display.drawInvertedBitmap(184 + (96 + 150) * 2, 213 + 10,
+                             running_icon_48x48, 48, 48, GxEPD_BLACK);
+  // Draw run times for each bus stop
+  for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
+  {
+      display.setFont(&FONT_8pt8b);
+      drawString(184 + 24 + (96 + 150) * i, 213 + 48 + 12 + 10, String(translink_bus_info[i].run_time) + "min", CENTER);
+  }
+
+  // Draw run times for each bus stop
+  for(int busIndex = 0; busIndex < TRANSLINK_BUSES_DISPLAYED; busIndex++)
+  {
+      int schedIndex = 0;
+      for(int j = 0; j < 3; j++)
+      {
+        String schedule = String(r[busIndex].schedules[schedIndex + j].expected_leave_time) + ", in " + 
+                          r[busIndex].schedules[schedIndex + j].expected_countdown + " min";
+        String lateness = getTLScheduleStatusString(r[busIndex].schedules[schedIndex + j].schedule_status);
+
+        // draw schedules
+        display.setFont(&FONT_12pt8b);
+        drawString(45 + (96 + 150) * busIndex, 210 + 96 + 10 + (52 * j), schedule, LEFT);
+        // draw schedules
+        display.setFont(&FONT_8pt8b);
+        drawString(45 + 40 + (96 + 150) * busIndex, 210 + 96 + 20 + 10 + (52 * j), lateness, CENTER);
+      }
+  }
+}
+
 /* This function is responsible for drawing the current conditions and
  * associated icons.
  */
 void drawCurrentConditions(const owm_current_t &current,
                            const owm_daily_t &today,
+                           owm_hourly_t *const hourly,
                            const owm_resp_air_pollution_t &owm_air_pollution,
                            float inTemp, float inHumidity)
 {
   String dataStr, unitStr;
   // current weather icon
   display.drawInvertedBitmap(0, 0,
-                             getCurrentConditionsBitmap196(current, today),
+                             getCurrentConditionsBitmap196(current, today, hourly),
                              196, 196, GxEPD_BLACK);
 
   // current temp
@@ -287,7 +380,7 @@ void drawCurrentConditions(const owm_current_t &current,
   unitStr = TXT_UNITS_TEMP_FAHRENHEIT;
 #endif
   // FONT_**_temperature fonts only have the character set used for displaying
-  // temperature (0123456789.-\260)
+  // temperature (0123456789.-\xB0)
   display.setFont(&FONT_48pt8b_temperature);
 #if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
     drawString(196 + 164 / 2 - 20, 196 / 2 + 69 / 2, dataStr, CENTER);
@@ -306,13 +399,13 @@ void drawCurrentConditions(const owm_current_t &current,
   dataStr = String(TXT_FEELS_LIKE) + ' '
             + String(static_cast<int>(round(
                      kelvin_to_celsius(current.feels_like))))
-            + '\260';
+            + '\xB0';
 #endif
 #ifdef UNITS_TEMP_FAHRENHEIT
   dataStr = String(TXT_FEELS_LIKE) + ' '
             + String(static_cast<int>(round(
                      kelvin_to_fahrenheit(current.feels_like))))
-            + '\260';
+            + '\xB0';
 #endif
   display.setFont(&FONT_12pt8b);
 #if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
@@ -320,9 +413,10 @@ void drawCurrentConditions(const owm_current_t &current,
 #elif defined(DISP_BW_V1)
   drawString(156 + 164 / 2, 98 + 69 / 2 + 12 + 17, dataStr, CENTER);
 #endif
+  
   // line dividing top and bottom display areas
   // display.drawLine(0, 196, DISP_WIDTH - 1, 196, GxEPD_BLACK);
-
+/*
   // current weather data icons
   display.drawInvertedBitmap(0, 204 + (48 + 8) * 0,
                              wi_sunrise_48x48, 48, 48, GxEPD_BLACK);
@@ -419,7 +513,7 @@ void drawCurrentConditions(const owm_current_t &current,
              unitStr, LEFT);
 
 #if defined(WIND_INDICATOR_NUMBER)
-  dataStr = String(current.wind_deg) + "\260";
+  dataStr = String(current.wind_deg) + "\xB0";
   display.setFont(&FONT_12pt8b);
   drawString(display.getCursorX() + 6, 204 + 17 / 2 + (48 + 8) * 1 + 48 / 2,
              dataStr, LEFT);
@@ -518,7 +612,7 @@ void drawCurrentConditions(const owm_current_t &current,
     dataStr = "--";
   }
 #if defined(UNITS_TEMP_CELSIUS) || defined(UNITS_TEMP_FAHRENHEIT)
-  dataStr += "\260";
+  dataStr += "\xB0";
 #endif
   drawString(48, 204 + 17 / 2 + (48 + 8) * 4 + 48 / 2, dataStr, LEFT);
 #endif // defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
@@ -636,6 +730,69 @@ void drawCurrentConditions(const owm_current_t &current,
   drawString(display.getCursorX(), 204 + 17 / 2 + (48 + 8) * 4 + 48 / 2,
              "%", LEFT);
 #endif // defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
+*/
+  return;
+} // end drawCurrentConditions
+
+/* This function is responsible for drawing the current conditions and
+ * associated icons on the top bar when Translink API is enabled
+ */
+void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall &s)
+{
+  String dataStr, unitStr;
+  // current weather icon
+  display.drawInvertedBitmap(0, 0,
+                             s.current_conditions_bitmap_196,
+                             196, 196, GxEPD_BLACK);
+
+  // current temp
+#ifdef UNITS_TEMP_KELVIN
+  dataStr = String(static_cast<int>(round(current.temp)));
+  unitStr = TXT_UNITS_TEMP_KELVIN;
+#endif
+#ifdef UNITS_TEMP_CELSIUS
+  dataStr = String(static_cast<int>(round(kelvin_to_celsius(s.current_temp))));
+  unitStr = TXT_UNITS_TEMP_CELSIUS;
+#endif
+#ifdef UNITS_TEMP_FAHRENHEIT
+  dataStr = String(static_cast<int>(round(kelvin_to_fahrenheit(s.current_temp))));
+  unitStr = TXT_UNITS_TEMP_FAHRENHEIT;
+#endif
+  // FONT_**_temperature fonts only have the character set used for displaying
+  // temperature (0123456789.-\xB0)
+  display.setFont(&FONT_48pt8b_temperature);
+#if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
+    drawString(196 + 164 / 2 - 20, 196 / 2 + 69 / 2, dataStr, CENTER);
+#elif defined(DISP_BW_V1)
+    drawString(156 + 164 / 2 - 20, 196 / 2 + 69 / 2, dataStr, CENTER);
+#endif
+  display.setFont(&FONT_14pt8b);
+  drawString(display.getCursorX(), 196 / 2 - 69 / 2 + 20, unitStr, LEFT);
+
+  // current feels like
+#ifdef UNITS_TEMP_KELVIN
+  dataStr = String(TXT_FEELS_LIKE) + ' '
+            + String(static_cast<int>(round(current.feels_like)));
+#endif
+#ifdef UNITS_TEMP_CELSIUS
+  dataStr = String(TXT_FEELS_LIKE) + ' '
+            + String(static_cast<int>(round(
+                     kelvin_to_celsius(s.current_feels_like))))
+            + '\xB0';
+#endif
+#ifdef UNITS_TEMP_FAHRENHEIT
+  dataStr = String(TXT_FEELS_LIKE) + ' '
+            + String(static_cast<int>(round(
+                     kelvin_to_fahrenheit(current.feels_like))))
+            + '\xB0';
+#endif
+  display.setFont(&FONT_12pt8b);
+#if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
+  drawString(196 + 164 / 2, 98 + 69 / 2 + 12 + 17, dataStr, CENTER);
+#elif defined(DISP_BW_V1)
+  drawString(156 + 164 / 2, 98 + 69 / 2 + 12 + 17, dataStr, CENTER);
+#endif
+
   return;
 } // end drawCurrentConditions
 
@@ -645,45 +802,96 @@ void drawForecast(owm_daily_t *const daily, tm timeInfo)
 {
   // 5 day, forecast
   String hiStr, loStr;
-  for (int i = 0; i < 5; ++i)
+  for (int i = 0; i < 3; ++i)
   {
 #if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
-    int x = 398 + (i * 82);
+    int x = 388 + (i * 82);
 #elif defined(DISP_BW_V1)
     int x = 318 + (i * 64);
 #endif
     // icons
-    display.drawInvertedBitmap(x, 98 + 69 / 2 - 32 - 6,
+    display.drawInvertedBitmap(x, 48 + 69 / 2 - 32 - 6,
                                getForecastBitmap64(daily[i]),
                                64, 64, GxEPD_BLACK);
     // day of week label
     display.setFont(&FONT_11pt8b);
     char dayBuffer[8] = {};
     _strftime(dayBuffer, sizeof(dayBuffer), "%a", &timeInfo); // abbrv'd day
-    drawString(x + 31 - 2, 98 + 69 / 2 - 32 - 26 - 6 + 16, dayBuffer, CENTER);
+    drawString(x + 31 - 2, 48 + 69 / 2 - 32 - 26 - 6 + 16, dayBuffer, CENTER);
     timeInfo.tm_wday = (timeInfo.tm_wday + 1) % 7; // increment to next day
 
     // high | low
     display.setFont(&FONT_8pt8b);
-    drawString(x + 31, 98 + 69 / 2 + 38 - 6 + 12, "|", CENTER);
+    drawString(x + 31, 48 + 69 / 2 + 38 - 6 + 12, "|", CENTER);
 #ifdef UNITS_TEMP_KELVIN
   hiStr = String(static_cast<int>(round(daily[i].temp.max)));
   loStr = String(static_cast<int>(round(daily[i].temp.min)));
 #endif
 #ifdef UNITS_TEMP_CELSIUS
   hiStr = String(static_cast<int>(round(kelvin_to_celsius(daily[i].temp.max)
-                 ))) + "\260";
+                 ))) + "\xB0";
   loStr = String(static_cast<int>(round(kelvin_to_celsius(daily[i].temp.min)
-                 ))) + "\260";
+                 ))) + "\xB0";
 #endif
 #ifdef UNITS_TEMP_FAHRENHEIT
   hiStr = String(static_cast<int>(round(kelvin_to_fahrenheit(daily[i].temp.max)
-                 ))) + "\260";
+                 ))) + "\xB0";
   loStr = String(static_cast<int>(round(kelvin_to_fahrenheit(daily[i].temp.min)
-                 ))) + "\260";
+                 ))) + "\xB0";
 #endif
-    drawString(x + 31 - 4, 98 + 69 / 2 + 38 - 6 + 12, hiStr, RIGHT);
-    drawString(x + 31 + 5, 98 + 69 / 2 + 38 - 6 + 12, loStr, LEFT);
+    drawString(x + 31 - 4, 48 + 69 / 2 + 38 - 6 + 12, hiStr, RIGHT);
+    drawString(x + 31 + 5, 48 + 69 / 2 + 38 - 6 + 12, loStr, LEFT);
+  }
+
+  return;
+} // end drawForecast
+
+/* This function is responsible for drawing the three day forecast
+ * for the top bar when Translink API enabled
+ */
+void drawForecastTopBar(compressed_owm_resp_onecall_t &s, tm timeInfo)
+{
+  // 3 day, forecast
+  String hiStr, loStr;
+  for (int i = 0; i < 3; ++i)
+  {
+#if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
+    int x = 388 + (i * 82);
+#elif defined(DISP_BW_V1)
+    int x = 318 + (i * 64);
+#endif
+    // icons
+    display.drawInvertedBitmap(x, 48 + 69 / 2 - 32 - 6,
+                               s.daily[i].forecast_bitmap_64,
+                               64, 64, GxEPD_BLACK);
+    // day of week label
+    display.setFont(&FONT_11pt8b);
+    char dayBuffer[8] = {};
+    _strftime(dayBuffer, sizeof(dayBuffer), "%a", &timeInfo); // abbrv'd day
+    drawString(x + 31 - 2, 48 + 69 / 2 - 32 - 26 - 6 + 16, dayBuffer, CENTER);
+    timeInfo.tm_wday = (timeInfo.tm_wday + 1) % 7; // increment to next day
+
+    // high | low
+    display.setFont(&FONT_8pt8b);
+    drawString(x + 31, 48 + 69 / 2 + 38 - 6 + 12, "|", CENTER);
+#ifdef UNITS_TEMP_KELVIN
+  hiStr = String(static_cast<int>(round(daily[i].temp.max)));
+  loStr = String(static_cast<int>(round(daily[i].temp.min)));
+#endif
+#ifdef UNITS_TEMP_CELSIUS
+  hiStr = String(static_cast<int>(round(kelvin_to_celsius(s.daily[i].temp_max)
+                 ))) + "\xB0";
+  loStr = String(static_cast<int>(round(kelvin_to_celsius(s.daily[i].temp_min)
+                 ))) + "\xB0";
+#endif
+#ifdef UNITS_TEMP_FAHRENHEIT
+  hiStr = String(static_cast<int>(round(kelvin_to_fahrenheit(daily[i].temp.max)
+                 ))) + "\xB0";
+  loStr = String(static_cast<int>(round(kelvin_to_fahrenheit(daily[i].temp.min)
+                 ))) + "\xB0";
+#endif
+    drawString(x + 31 - 4, 48 + 69 / 2 + 38 - 6 + 12, hiStr, RIGHT);
+    drawString(x + 31 + 5, 48 + 69 / 2 + 38 - 6 + 12, loStr, LEFT);
   }
 
   return;
@@ -800,6 +1008,18 @@ void drawAlerts(std::vector<owm_alerts_t> &alerts,
 
   return;
 } // end drawAlerts
+
+void drawCurrentTime(tm timeInfo)
+{
+  char buf[48] = {};
+  _strftime(buf, sizeof(buf), "%l:%M%P", &timeInfo);
+  String time_str(buf);
+
+  // location, date
+  display.setFont(&FONT_16pt8b);
+  drawString(DISP_WIDTH - 4, 95, time_str, RIGHT);
+  return;
+}
 
 /* This function is responsible for drawing the city string and date
  * information in the top right corner.
@@ -962,7 +1182,7 @@ void drawOutlookGraph(owm_hourly_t *const hourly, tm timeInfo)
     // Temperature
     dataStr = String(tempBoundMax - (i * yTempMajorTicks));
 #if defined(UNITS_TEMP_CELSIUS) || defined(UNITS_TEMP_FAHRENHEIT)
-    dataStr += "\260";
+    dataStr += "\xB0";
 #endif
     drawString(xPos0 - 8, yTick + 4, dataStr, RIGHT, ACCENT_COLOR);
 

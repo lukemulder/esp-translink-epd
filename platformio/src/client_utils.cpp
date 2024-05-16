@@ -144,9 +144,9 @@ bool waitForSNTPSync(tm *timeInfo)
  * Returns the HTTP Status Code.
  */
 #ifdef USE_HTTP
-  int getOWMonecall(WiFiClient &client, owm_resp_onecall_t &r)
+  int getOWMonecall(WiFiClient &client, compressed_owm_resp_onecall_t &r)
 #else
-  int getOWMonecall(WiFiClientSecure &client, owm_resp_onecall_t &r)
+  int getOWMonecall(WiFiClientSecure &client, compressed_owm_resp_onecall_t &r)
 #endif
 {
   int attempts = 0;
@@ -176,6 +176,7 @@ bool waitForSNTPSync(tm *timeInfo)
     httpResponse = http.GET();
     if (httpResponse == HTTP_CODE_OK)
     {
+      Serial.println("HTTP Response OK, attempting deserialize");
       jsonErr = deserializeOneCall(http.getStream(), r);
       if (jsonErr)
       {
@@ -194,6 +195,60 @@ bool waitForSNTPSync(tm *timeInfo)
 
   return httpResponse;
 } // getOWMonecall
+
+/* Perform an Real Time Transit Information (RTTI) request to Translink's API
+ * If data is received, it will be parsed and stored in the global variable
+ * tl_xml_stream.
+ *
+ * Returns the HTTP Status Code.
+ */
+#ifdef USE_HTTP
+  int getTranslinkRTTIBusSchedule(WiFiClient &client, compressed_tl_resp_rtti_t &r, const String &stop_num, const String &route_name)
+#else
+  int getTranslinkRTTIBusSchedule(WiFiClientSecure &client, compressed_tl_resp_rtti_t &r, const String &stop_num, const String &route_name)
+#endif
+{
+  int attempts = 0;
+  bool rxSuccess = false;
+  DeserializationError jsonErr = {};
+
+  String uri = "/rttiapi/v1/stops/" + stop_num + "/estimates?apikey=" + TRANSLINK_APIKEY + 
+                "&count=" + RTTI_NUM_SCHEDULES + "&timeframe=" + RTTI_TIMEFRAME_MIN + "&routeNo=" + route_name;
+
+  // This string is printed to terminal to help with debugging. The API key is
+  // censored to reduce the risk of users exposing their key.
+  String sanitizedUri = TRANSLINK_ENDPOINT + "/rttiapi/v1/stops/" + stop_num + "/estimates?apikey=[API_KEY]&count=" + 
+                        RTTI_NUM_SCHEDULES + "&timeframe=" + RTTI_TIMEFRAME_MIN + "&routeNo=" + route_name;
+
+  Serial.print(TXT_ATTEMPTING_HTTP_REQ);
+  Serial.println(": " + sanitizedUri);
+  int httpResponse = 0;
+  while (!rxSuccess && attempts < 3)
+  {
+    HTTPClient http;
+    http.begin(client, TRANSLINK_ENDPOINT, OWM_PORT, uri);
+    http.addHeader("Accept", "application/json"); // Add the "Accept: application/json" header
+    httpResponse = http.GET();
+    if (httpResponse == HTTP_CODE_OK)
+    {
+      jsonErr = deserializeTranslinkRTTI(http.getStream(), r);
+      if (jsonErr)
+      {
+        rxSuccess = false;
+        // -100 offset distinguishes these errors from httpClient errors
+        httpResponse = -100 - static_cast<int>(jsonErr.code());
+      }
+      rxSuccess = !jsonErr;
+    }
+    client.stop();
+    http.end();
+    Serial.println("  " + String(httpResponse, DEC) + " "
+                  + getHttpResponsePhrase(httpResponse));
+    ++attempts;
+  }
+
+  return httpResponse;
+} // getTranslinkRTTIBusSchedule
 
 /* Perform an HTTP GET request to OpenWeatherMap's "Air Pollution" API
  * If data is received, it will be parsed and stored in the global variable

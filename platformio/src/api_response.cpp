@@ -19,9 +19,12 @@
 #include <ArduinoJson.h>
 #include "api_response.h"
 #include "config.h"
+#include "display_utils.h"
+
+static owm_resp_onecall_t r;
 
 DeserializationError deserializeOneCall(WiFiClient &json,
-                                        owm_resp_onecall_t &r)
+                                        compressed_owm_resp_onecall_t &cr)
 {
   int i;
 
@@ -61,6 +64,8 @@ DeserializationError deserializeOneCall(WiFiClient &json,
     return error;
   }
 
+  // Uncompressed Response
+
   r.lat             = doc["lat"]            .as<float>();
   r.lon             = doc["lon"]            .as<float>();
   r.timezone        = doc["timezone"]       .as<const char *>();
@@ -88,6 +93,11 @@ DeserializationError deserializeOneCall(WiFiClient &json,
   r.current.weather.main        = current_weather["main"]       .as<const char *>();
   r.current.weather.description = current_weather["description"].as<const char *>();
   r.current.weather.icon        = current_weather["icon"]       .as<const char *>();
+
+  // Compressed Response
+  cr.current_dt         = r.current.dt;
+  cr.current_feels_like = r.current.feels_like;
+  cr.current_temp       = r.current.temp;
 
   // minutely forecast is currently unused
   // i = 0;
@@ -137,6 +147,7 @@ DeserializationError deserializeOneCall(WiFiClient &json,
   i = 0;
   for (JsonObject daily : doc["daily"].as<JsonArray>())
   {
+    // Fill the uncompressed version for processing later
     r.daily[i].dt         = daily["dt"]        .as<int64_t>();
     r.daily[i].sunrise    = daily["sunrise"]   .as<int64_t>();
     r.daily[i].sunset     = daily["sunset"]    .as<int64_t>();
@@ -173,6 +184,13 @@ DeserializationError deserializeOneCall(WiFiClient &json,
     r.daily[i].weather.description = daily_weather["description"].as<const char *>();
     r.daily[i].weather.icon        = daily_weather["icon"]       .as<const char *>();
 
+    // Fill the compressed version for storage during deep sleep
+    cr.daily[i].dt         = r.daily[i].dt;
+    cr.daily[i].temp_max   = r.daily[i].temp.max;
+    cr.daily[i].temp_min   = r.daily[i].temp.min;
+
+    cr.daily[i].forecast_bitmap_64 = getForecastBitmap64(r.daily[i]);
+
     if (i == OWM_NUM_DAILY - 1)
     {
       break;
@@ -200,6 +218,10 @@ DeserializationError deserializeOneCall(WiFiClient &json,
     ++i;
   }
 #endif
+
+  cr.current_conditions_bitmap_196 = getCurrentConditionsBitmap196(r.current,
+                                                                   r.daily[0],
+                                                                   r.hourly);
 
   return error;
 } // end deserializeOneCall
@@ -253,3 +275,51 @@ DeserializationError deserializeAirQuality(WiFiClient &json,
   return error;
 } // end deserializeAirQuality
 
+DeserializationError deserializeTranslinkRTTI(WiFiClient &json,
+                                              compressed_tl_resp_rtti_t &cr)
+{
+  int i;
+  JsonDocument doc;
+
+  String bus_route;
+  String expected_leave_time;
+
+  DeserializationError error = deserializeJson(doc, json);
+#if DEBUG_LEVEL >= 1
+  Serial.println("[debug] doc.overflowed() : "
+                 + String(doc.overflowed()));
+#endif
+#if DEBUG_LEVEL >= 2
+  serializeJsonPretty(doc, Serial);
+#endif
+  if (error) {
+    return error;
+  }
+
+  JsonObject obj = doc[0].as<JsonObject>();
+
+  bus_route       = obj["RouteNo"]  .as<const char *>();
+  // Remove trailing '0's
+  while(bus_route.charAt(0) == '0' && (bus_route).length() > 1)
+    bus_route = bus_route.substring(1, (bus_route).length());
+
+  strncpy(cr.bus_route, bus_route.c_str(), MAX_BUS_ROUTE_STR_SIZE);
+  strncpy(cr.bus_dir,   obj["Direction"].as<const char *>(), MAX_BUS_DIR_STR_SIZE);
+
+  i = 0;
+  for (JsonObject schedules : obj["Schedules"].as<JsonArray>())
+  {
+    expected_leave_time = schedules["ExpectedLeaveTime"].as<const char *>();
+    expected_leave_time = expected_leave_time.substring(0, expected_leave_time.indexOf('m') + 1);
+
+    strncpy(cr.schedules[i].expected_leave_time, expected_leave_time.c_str(), MAX_EXPECTED_LEAVE_STR_SIZE);
+    cr.schedules[i].expected_countdown = schedules["ExpectedCountdown"].as<int>() - 1;
+    cr.schedules[i].schedule_status = schedules["ScheduleStatus"].as<const char *>()[0];
+
+    i++;
+  }
+
+  cr.valid_schedules = i;
+
+  return error;
+} // end deserializeTranslinkRTTI

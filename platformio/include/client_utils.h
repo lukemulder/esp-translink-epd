@@ -32,11 +32,13 @@ void killWiFi();
 bool waitForSNTPSync(tm *timeInfo);
 bool printLocalTime(tm *timeInfo);
 #ifdef USE_HTTP
-  int getOWMonecall(WiFiClient &client, owm_resp_onecall_t &r);
-  int getOWMairpollution(WiFiClient &client, owm_resp_air_pollution_t &r);
+  int getOWMonecall(WiFiClient &client, compressed_owm_resp_onecall_t &r);
+  int getOWMairpollution(WiFiClient &client, compressed_owm_resp_onecall_t &r);
+  int getTranslinkRTTIBusSchedule(WiFiClient &client, compressed_tl_resp_rtti_t &r, const String &stop_num, const String &route_name);
 #else
-  int getOWMonecall(WiFiClientSecure &client, owm_resp_onecall_t &r);
-  int getOWMairpollution(WiFiClientSecure &client, owm_resp_air_pollution_t &r);
+  int getOWMonecall(WiFiClientSecure &client, compressed_owm_resp_onecall_t &r);
+  int getOWMairpollution(WiFiClientSecure &client, compressed_owm_resp_onecall_t &r);
+  int getTranslinkRTTIBusSchedule(WiFiClientSecure &client, compressed_tl_resp_rtti_t &r, const String &stop_num, const String &route_name);
 #endif
 
 

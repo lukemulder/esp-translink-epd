@@ -70,13 +70,18 @@ void drawMultiLnString(int16_t x, int16_t y, const String &text,
                        uint16_t color=GxEPD_BLACK);
 void initDisplay();
 void powerOffDisplay();
+void drawBusSchedules(compressed_tl_resp_rtti_t* r);
 void drawCurrentConditions(const owm_current_t &current,
                            const owm_daily_t &today,
+                           owm_hourly_t *const hourly,
                            const owm_resp_air_pollution_t &owm_air_pollution,
                            float inTemp, float inHumidity);
+void drawCurrentConditionsTopBar(const compressed_owm_resp_onecall &s);
 void drawForecast(owm_daily_t *const daily, tm timeInfo);
+void drawForecastTopBar(compressed_owm_resp_onecall_t &s, tm timeInfo);
 void drawAlerts(std::vector<owm_alerts_t> &alerts,
                 const String &city, const String &date);
+void drawCurrentTime(tm timeInfo);
 void drawLocationDate(const String &city, const String &date);
 void drawOutlookGraph(owm_hourly_t *const hourly, tm timeInfo);
 void drawStatusBar(const String &statusStr, const String &refreshTimeStr,

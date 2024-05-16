@@ -30,16 +30,13 @@
 #include "display_utils.h"
 #include "icons/icons_196x196.h"
 #include "renderer.h"
+#include "data_manager.h"
 #if defined(USE_HTTPS_WITH_CERT_VERIF) || defined(USE_HTTPS_WITH_CERT_VERIF)
   #include <WiFiClientSecure.h>
 #endif
 #ifdef USE_HTTPS_WITH_CERT_VERIF
   #include "cert.h"
 #endif
-
-// too large to allocate locally on stack
-static owm_resp_onecall_t       owm_onecall;
-static owm_resp_air_pollution_t owm_air_pollution;
 
 Preferences prefs;
 
@@ -200,47 +197,63 @@ void setup()
   String tmpStr = {};
   tm timeInfo = {};
 
-  // START WIFI
-  int wifiRSSI = 0; // “Received Signal Strength Indicator"
-  wl_status_t wifiStatus = startWiFi(wifiRSSI);
-  if (wifiStatus != WL_CONNECTED)
-  { // WiFi Connection Failed
-    killWiFi();
-    initDisplay();
-    if (wifiStatus == WL_NO_SSID_AVAIL)
-    {
-      Serial.println(TXT_NETWORK_NOT_AVAILABLE);
-      do
-      {
-        drawError(wifi_x_196x196, TXT_NETWORK_NOT_AVAILABLE);
-      } while (display.nextPage());
-    }
-    else
-    {
-      Serial.println(TXT_WIFI_CONNECTION_FAILED);
-      do
-      {
-        drawError(wifi_x_196x196, TXT_WIFI_CONNECTION_FAILED);
-      } while (display.nextPage());
-    }
-    powerOffDisplay();
-    beginDeepSleep(startTime, &timeInfo);
-  }
+  bool firstBoot = (esp_reset_reason() != ESP_RST_DEEPSLEEP);
+  bool timeConfigured = false;
 
-  // TIME SYNCHRONIZATION
-  configTzTime(TIMEZONE, NTP_SERVER_1, NTP_SERVER_2);
-  bool timeConfigured = waitForSNTPSync(&timeInfo);
-  if (!timeConfigured)
+  setenv("TZ", TIMEZONE, 1);
+  getLocalTime(&timeInfo);
+
+  DataManager dataManager;
+
+  dataManager.init(&timeInfo, firstBoot);
+
+  int wifiRSSI = 0; // “Received Signal Strength Indicator"
+
+  if(firstBoot || dataManager.openWeatherMapDataStale() || dataManager.translinkDataStale())
   {
-    Serial.println(TXT_TIME_SYNCHRONIZATION_FAILED);
-    killWiFi();
-    initDisplay();
-    do
+    // START WIFI
+    wl_status_t wifiStatus = startWiFi(wifiRSSI);
+    if (wifiStatus != WL_CONNECTED)
+    { // WiFi Connection Failed
+      killWiFi();
+      initDisplay();
+      if (wifiStatus == WL_NO_SSID_AVAIL)
+      {
+        Serial.println(TXT_NETWORK_NOT_AVAILABLE);
+        do
+        {
+          drawError(wifi_x_196x196, TXT_NETWORK_NOT_AVAILABLE);
+        } while (display.nextPage());
+      }
+      else
+      {
+        Serial.println(TXT_WIFI_CONNECTION_FAILED);
+        do
+        {
+          drawError(wifi_x_196x196, TXT_WIFI_CONNECTION_FAILED);
+        } while (display.nextPage());
+      }
+      powerOffDisplay();
+      beginDeepSleep(startTime, &timeInfo);
+    }
+
+    // TIME SYNCHRONIZATION
+    configTzTime(TIMEZONE, NTP_SERVER_1, NTP_SERVER_2);
+    timeConfigured = waitForSNTPSync(&timeInfo);
+    if (!timeConfigured)
     {
-      drawError(wi_time_4_196x196, TXT_TIME_SYNCHRONIZATION_FAILED);
-    } while (display.nextPage());
-    powerOffDisplay();
-    beginDeepSleep(startTime, &timeInfo);
+      Serial.println(TXT_TIME_SYNCHRONIZATION_FAILED);
+      killWiFi();
+      initDisplay();
+      do
+      {
+        drawError(wi_time_4_196x196, TXT_TIME_SYNCHRONIZATION_FAILED);
+      } while (display.nextPage());
+      powerOffDisplay();
+      beginDeepSleep(startTime, &timeInfo);
+    }
+
+    dataManager.setTimeInfo(&timeInfo);
   }
 
   // MAKE API REQUESTS
@@ -253,89 +266,65 @@ void setup()
   WiFiClientSecure client;
   client.setCACert(cert_Sectigo_RSA_Domain_Validation_Secure_Server_CA);
 #endif
-  int rxStatus = getOWMonecall(client, owm_onecall);
-  if (rxStatus != HTTP_CODE_OK)
+
+  int rxStatus;
+
+  // WEATHER ONE CALL
+  if(dataManager.openWeatherMapDataStale())
   {
-    killWiFi();
-    statusStr = "One Call " + OWM_ONECALL_VERSION + " API";
-    tmpStr = String(rxStatus, DEC) + ": " + getHttpResponsePhrase(rxStatus);
-    initDisplay();
-    do
+    rxStatus = dataManager.updateOpenWeatherMapData();
+    if (rxStatus != HTTP_CODE_OK)
     {
-      drawError(wi_cloud_down_196x196, statusStr, tmpStr);
-    } while (display.nextPage());
-    powerOffDisplay();
-    beginDeepSleep(startTime, &timeInfo);
+      killWiFi();
+      statusStr = "One Call " + OWM_ONECALL_VERSION + " API";
+      tmpStr = String(rxStatus, DEC) + ": " + getHttpResponsePhrase(rxStatus);
+      initDisplay();
+      do
+      {
+        drawError(wi_cloud_down_196x196, statusStr, tmpStr);
+      } while (display.nextPage());
+      powerOffDisplay();
+      beginDeepSleep(startTime, &timeInfo);
+    }
   }
-  rxStatus = getOWMairpollution(client, owm_air_pollution);
-  if (rxStatus != HTTP_CODE_OK)
+
+  // TRANSLINK API CALL
+  if(dataManager.translinkDataStale())
   {
-    killWiFi();
-    statusStr = "Air Pollution API";
-    tmpStr = String(rxStatus, DEC) + ": " + getHttpResponsePhrase(rxStatus);
-    initDisplay();
-    do
+    rxStatus = dataManager.updateTranslinkData();
+    if (rxStatus != HTTP_CODE_OK)
     {
-      drawError(wi_cloud_down_196x196, statusStr, tmpStr);
-    } while (display.nextPage());
-    powerOffDisplay();
-    beginDeepSleep(startTime, &timeInfo);
+      killWiFi();
+      statusStr = "Translink RTTI API";
+      tmpStr = String(rxStatus, DEC) + ": " + getHttpResponsePhrase(rxStatus);
+      initDisplay();
+      do
+      {
+        drawError(wi_cloud_down_196x196, statusStr, tmpStr);
+      } while (display.nextPage());
+      powerOffDisplay();
+      beginDeepSleep(startTime, &timeInfo);
+    }
   }
+
   killWiFi(); // WiFi no longer needed
-
-  // GET INDOOR TEMPERATURE AND HUMIDITY, start BME280...
-  pinMode(PIN_BME_PWR, OUTPUT);
-  digitalWrite(PIN_BME_PWR, HIGH);
-  float inTemp     = NAN;
-  float inHumidity = NAN;
-  Serial.print(String(TXT_READING_FROM) + " BME280... ");
-  TwoWire I2C_bme = TwoWire(0);
-  Adafruit_BME280 bme;
-
-  I2C_bme.begin(PIN_BME_SDA, PIN_BME_SCL, 100000); // 100kHz
-  if(bme.begin(BME_ADDRESS, &I2C_bme))
-  {
-    inTemp     = bme.readTemperature(); // Celsius
-    inHumidity = bme.readHumidity();    // %
-
-    // check if BME readings are valid
-    // note: readings are checked again before drawing to screen. If a reading
-    //       is not a number (NAN) then an error occurred, a dash '-' will be
-    //       displayed.
-    if (std::isnan(inTemp) || std::isnan(inHumidity))
-    {
-      statusStr = "BME " + String(TXT_READ_FAILED);
-      Serial.println(statusStr);
-    }
-    else
-    {
-      Serial.println(TXT_SUCCESS);
-    }
-  }
-  else
-  {
-    statusStr = "BME " + String(TXT_NOT_FOUND); // check wiring
-    Serial.println(statusStr);
-  }
-  digitalWrite(PIN_BME_PWR, LOW);
 
   String refreshTimeStr;
   getRefreshTimeStr(refreshTimeStr, timeConfigured, &timeInfo);
   String dateStr;
   getDateStr(dateStr, &timeInfo);
 
-  // RENDER FULL REFRESH
+  // RENDER DISPLAY REFRESH
   initDisplay();
+
   do
   {
-    drawCurrentConditions(owm_onecall.current, owm_onecall.daily[0],
-                          owm_air_pollution, inTemp, inHumidity);
-    drawForecast(owm_onecall.daily, timeInfo);
+    drawCurrentConditionsTopBar(*dataManager.getOpenWeatherMapData());
+    drawForecastTopBar(*dataManager.getOpenWeatherMapData(), timeInfo);
     drawLocationDate(CITY_STRING, dateStr);
-    drawOutlookGraph(owm_onecall.hourly, timeInfo);
-#if DISPLAY_ALERTS
-    drawAlerts(owm_onecall.alerts, CITY_STRING, dateStr);
-#endif
+    drawCurrentTime(timeInfo);
+    
+    drawBusSchedules(dataManager.getTranslinkData());
     drawStatusBar(statusStr, refreshTimeStr, wifiRSSI, batteryVoltage);
   } while (display.nextPage());
   powerOffDisplay();
