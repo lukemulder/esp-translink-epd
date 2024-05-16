@@ -40,7 +40,7 @@ extern RTC_DATA_ATTR compressed_tl_resp_rtti_t      comp_translink_rtti_schedule
 class DataManager
 {
     public:
-        void init(tm* timeInfo, bool firstBoot);
+        void init(tm* currentTime, bool firstBoot);
         int updateTranslinkData();
         int updateOpenWeatherMapData();
 
@@ -50,18 +50,20 @@ class DataManager
         compressed_tl_resp_rtti_t* getTranslinkData();
         compressed_owm_resp_onecall_t* getOpenWeatherMapData();
 
-        void setTimeInfo(tm* timeInfo);
+        void setCurrentTime(tm* currentTime);
 
     private:
         void evalTranslinkDataStale();
         void evalOpenWeatherMapDataStale();
 
         void processTranslinkSchedules();
+        void addDateStampTranslinkSchedule(compressed_tl_resp_rtti_t &s);
+        tm busScheduleEntryTo24TM(char s[MAX_EXPECTED_LEAVE_STR_SIZE], int yday);
 
         bool tlDataStale;
         bool OWMDataStale;
 
-        tm timeInfo;
+        tm currentTime;
 
         compressed_owm_resp_onecall_t *owm_onecall;
         compressed_tl_resp_rtti_t     *translink_rtti_schedules;

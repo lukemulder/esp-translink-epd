@@ -238,14 +238,14 @@ typedef struct translink_resp_rtti
 
 typedef struct compressed_rtti_schedule
 {
-  char  expected_leave_time[MAX_EXPECTED_LEAVE_STR_SIZE]; // Expected arrival time for bus (ex. 2:14pm) 
-  int   expected_countdown;                               // Expected number of minutes till arrival (ex. 10)
-  char  schedule_status;                                  // Early or late status (ex. "+" means running early)
+  char expected_leave_time[MAX_EXPECTED_LEAVE_STR_SIZE]; // Expected arrival time for bus (ex. 2:14pm) 
+  int  expected_countdown;                               // Expected number of minutes till arrival (ex. 10)
+  char schedule_status;                                  // Early or late status (ex. "+" means running early)
+  int  tm_yday;                                          // Day that the bus is expected to arrive (0-365)
 } compressed_rtti_schedule_t;  
 
 typedef struct compressed_tl_resp_rtti
 {
-  int     day;
   int     stop_num;
   char    bus_route[MAX_BUS_ROUTE_STR_SIZE]; // Bus route being polled (ex. 010)
   char    bus_dir[MAX_BUS_DIR_STR_SIZE];     // Direction the bus route is travelling

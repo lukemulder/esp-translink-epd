@@ -17,10 +17,12 @@
 
 #include "data_manager.h"
 
+#define VALID_YEAR 2000
+
 RTC_DATA_ATTR compressed_owm_resp_onecall_t  comp_owm_onecall = {0};
 RTC_DATA_ATTR compressed_tl_resp_rtti_t      comp_translink_rtti_schedules[TRANSLINK_BUSES_DISPLAYED] = {0};
 
-void DataManager::init(tm* timeInfo, bool firstBoot)
+void DataManager::init(tm* currentTime, bool firstBoot)
 {
   // MAKE API REQUESTS
 #ifdef USE_HTTP
@@ -31,9 +33,9 @@ void DataManager::init(tm* timeInfo, bool firstBoot)
   this->client.setCACert(cert_Sectigo_RSA_Domain_Validation_Secure_Server_CA);
 #endif
 
-    Serial.println("Data Manager time: " + String(timeInfo->tm_hour) + ":" + String(timeInfo->tm_min));
+    Serial.println("Data Manager time: " + String(currentTime->tm_hour) + ":" + String(currentTime->tm_min));
 
-    setTimeInfo(timeInfo);
+    setCurrentTime(currentTime);
 
     owm_onecall = &comp_owm_onecall;
     translink_rtti_schedules = comp_translink_rtti_schedules;
@@ -58,11 +60,43 @@ void DataManager::init(tm* timeInfo, bool firstBoot)
     }
 }
 
-void DataManager::setTimeInfo(tm* timeInfo)
+void DataManager::setCurrentTime(tm* currentTime)
 {
-    if (timeInfo != nullptr) {
-        memcpy(&this->timeInfo, timeInfo, sizeof(tm));
+    if (currentTime != nullptr) {
+        memcpy(&this->currentTime, currentTime, sizeof(tm));
     }
+}
+
+int isLeapYear(int year) {
+    // Adjust year since tm_year is the number of years since 1900
+    year += 1900;
+
+    // Leap year check
+    if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+void DataManager::addDateStampTranslinkSchedule(compressed_tl_resp_rtti_t &s)
+{
+  int numberDaysInDay = (isLeapYear(currentTime.tm_year)) ? 366 - 1 : 365 - 1;
+
+  for(int i = 0; i < s.valid_schedules; i++)
+  {
+    tm arrivalTime = busScheduleEntryTo24TM(s.schedules[i].expected_leave_time, 0);
+
+    // If arrival time has rolled over to next day
+    if(currentTime.tm_hour - arrivalTime.tm_hour > 12)
+    {
+      s.schedules[i].tm_yday = (currentTime.tm_yday + 1) % numberDaysInDay;
+    }
+    else
+    {
+      s.schedules[i].tm_yday = currentTime.tm_yday;
+    }
+  }
 }
 
 int DataManager::updateTranslinkData()
@@ -81,7 +115,7 @@ int DataManager::updateTranslinkData()
         {
         return rxStatus;
         }
-        translink_rtti_schedules[i].day = timeInfo.tm_mday;
+        addDateStampTranslinkSchedule(translink_rtti_schedules[i]);
     }
   }
 
@@ -141,8 +175,8 @@ void DataManager::evalOpenWeatherMapDataStale()
   // OpenWeatherCall
   if(SLEEP_DURATION_OWM > SLEEP_DURATION_TRANSLINK)
   {
-    if(((timeInfo.tm_min % SLEEP_DURATION_OWM) * 60ULL
-                      + timeInfo.tm_sec) < (SLEEP_DURATION_TRANSLINK * 60ULL))
+    if(((currentTime.tm_min % SLEEP_DURATION_OWM) * 60ULL
+                      + currentTime.tm_sec) < (SLEEP_DURATION_TRANSLINK * 60ULL))
     {
       Serial.println("Time To Poll: Within threshold for OpenWeatherMap polling");
       OWMDataStale = true;
@@ -168,11 +202,65 @@ bool DataManager::openWeatherMapDataStale()
     return OWMDataStale;
 }
 
+tm DataManager::busScheduleEntryTo24TM(char s[MAX_EXPECTED_LEAVE_STR_SIZE], int yday)
+{
+  int hours;
+  int mins;
+  char period[3];
+
+  tm time = {0};
+
+  if(sscanf(s, "%d:%d%2s", &hours, &mins, period) == 3)
+  {
+    // if pm then convert hours to 24 hours
+    if(period[0] == 'p' && hours < 12)
+    {
+      hours += 12;
+    }
+
+    time.tm_hour = hours;
+    time.tm_min = mins;
+    time.tm_yday = yday;
+  
+    time.tm_year = VALID_YEAR;
+  }
+
+  return time;
+}
+
+bool busScheduleEntryExpired(tm &arrivalTime, tm &currentTime, int busRunTime)
+{
+  return (arrivalTime.tm_yday == currentTime.tm_yday + 1 % 365 ||
+         (arrivalTime.tm_yday == currentTime.tm_yday && arrivalTime.tm_hour > currentTime.tm_hour) ||
+         (arrivalTime.tm_yday == currentTime.tm_yday && arrivalTime.tm_hour == currentTime.tm_hour && arrivalTime.tm_min > currentTime.tm_min + busRunTime + 1));
+}
+
+int busScheduleCountdownMin(tm& arrivalTime, tm& currentTime)
+{
+  int mins;
+
+  if(arrivalTime.tm_yday != currentTime.tm_yday)
+  {
+    mins = ((24 - currentTime.tm_hour + arrivalTime.tm_hour) * 60) + 
+           ((60 - currentTime.tm_min) + arrivalTime.tm_hour - 1);
+  }
+  else
+  {
+    mins = ((arrivalTime.tm_hour - arrivalTime.tm_hour) * 60) + 
+           (arrivalTime.tm_min - currentTime.tm_min - 1);
+  }
+
+  return mins;
+}
+
+bool isTimeValid(tm &arrivalTime)
+{
+  return (arrivalTime.tm_year == VALID_YEAR);
+}
+
 void DataManager::processTranslinkSchedules()
 {
-  int arrival_hours;
-  int arrival_mins;
-  char period[3];
+  tm arrivalTime;
 
   for(int bus = 0; bus < TRANSLINK_BUSES_DISPLAYED; bus++)
   {
@@ -180,33 +268,19 @@ void DataManager::processTranslinkSchedules()
 
     for(int schedule = 0; schedule < RTTI_NUM_SCHEDULES && schedule < comp_translink_rtti_schedules[bus].valid_schedules; schedule++)
     {
-      if(sscanf(comp_translink_rtti_schedules[bus].schedules[schedule].expected_leave_time, "%d:%d%2s", &arrival_hours, &arrival_mins, period) == 3)
-      {
-        // if pm then convert hours to 24 hours
-        if(period[0] == 'p' && arrival_hours < 12)
-        {
-          arrival_hours += 12;
-        }
+      arrivalTime = busScheduleEntryTo24TM(comp_translink_rtti_schedules[bus].schedules[schedule].expected_leave_time, comp_translink_rtti_schedules[bus].schedules[schedule].tm_yday);
 
+      if(isTimeValid(arrivalTime))
+      {
         // Remove elements from schedule that are expired
-        if(comp_translink_rtti_schedules[bus].day != timeInfo.tm_mday ||
-           (arrival_hours < timeInfo.tm_hour && arrival_hours > 1) ||
-           (arrival_hours == timeInfo.tm_hour && arrival_mins < timeInfo.tm_min + translink_bus_info[bus].run_time + 1))
+        if(busScheduleEntryExpired(arrivalTime, currentTime, translink_bus_info[bus].run_time))
         {
           staleSchedules++;
         }
         // Update the expected countdown to reflect the new time
         else
         {
-          // If time rolled over
-          if(arrival_hours < timeInfo.tm_hour && arrival_hours == 0)
-          {
-            comp_translink_rtti_schedules[bus].schedules[schedule].expected_countdown = (arrival_mins + (60 - timeInfo.tm_min) - 1);
-          }
-          else
-          {
-            comp_translink_rtti_schedules[bus].schedules[schedule].expected_countdown = ((arrival_hours - timeInfo.tm_hour) * 60) + (arrival_mins - timeInfo.tm_min - 1);
-          }
+          comp_translink_rtti_schedules[bus].schedules[schedule].expected_countdown = busScheduleCountdownMin(arrivalTime, currentTime);
         }
       }
       else // failed to parse
@@ -215,6 +289,7 @@ void DataManager::processTranslinkSchedules()
       }
     }
 
+    // Remove stale schedules from struct
     if(staleSchedules > 0)
     {
       comp_translink_rtti_schedules[bus].valid_schedules -= staleSchedules;

@@ -253,7 +253,7 @@ void setup()
       beginDeepSleep(startTime, &timeInfo);
     }
 
-    dataManager.setTimeInfo(&timeInfo);
+    dataManager.setCurrentTime(&timeInfo);
   }
 
   // MAKE API REQUESTS
