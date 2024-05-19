@@ -50,7 +50,7 @@ const unsigned long WIFI_TIMEOUT = 10000; // ms, WiFi connection timeout.
 
 // OPENWEATHERMAP API
 // OpenWeatherMap API key, https://openweathermap.org/
-const String OWM_APIKEY   = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+const String OWM_APIKEY   = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 const String OWM_ENDPOINT = "api.openweathermap.org";
 // OpenWeatherMap One Call 2.5 API is deprecated for all new free users
 // (accounts created after Summer 2022).
@@ -70,10 +70,11 @@ const String OWM_ONECALL_VERSION = "3.0";
 
 // TRANSLINK API
 // TRANSLINK API key, https://www.translink.ca/
-const String TRANSLINK_APIKEY   = "XXXXXXXXXXXXXXXXXXX";
+const String TRANSLINK_APIKEY   = "XXXXXXXXXXXXXXXXXXXX";
 const String TRANSLINK_ENDPOINT = "api.translink.ca";
 
 const BusInfo translink_bus_info[] = {
+//  {stop_id,  stop_name, walk_time, run_time}
     {"50769", "010", 8, 4},
     {"50804",  "R4", 8, 4},
     {"50752", "017", 5, 2}
@@ -133,7 +134,13 @@ const long SLEEP_DURATION_OWM = 60;
 // Aligned to the nearest minute boundary and must evenly divide 60.
 // For example, if set to 30 (minutes) the display will update at 00 or 30
 // minutes past the hour. (range: [2-60])
-const long SLEEP_DURATION_TRANSLINK = 3;
+const long SLEEP_DURATION_TRANSLINK = 2;
+
+// Time to reset translink data in case real-time values have drifted.
+// Aligned to the nearest minute boundary and must evenly divide 60.
+// For example, if set to 30 (minutes) the display will update at 00 or 30
+// minutes past the hour. (range: [2-60])
+const long DATA_RESET_TIME_TRANSLINK = 60;
 
 // Sleep duration in minutes. (aka how often esp32 will wake for an update)
 const long SLEEP_DURATION = min(SLEEP_DURATION_OWM, SLEEP_DURATION_TRANSLINK);
@@ -171,4 +178,3 @@ const unsigned long VERY_LOW_BATTERY_SLEEP_INTERVAL = 120; // (minutes)
 // FONTS
 // ALERTS
 // BATTERY MONITORING
-
