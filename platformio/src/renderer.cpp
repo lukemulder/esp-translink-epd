@@ -337,6 +337,13 @@ void drawBusSchedules(compressed_tl_resp_rtti_t* r)
       int schedIndex = 0;
       for(int j = 0; j < 3; j++)
       {
+        if(r[busIndex].schedules[schedIndex + j].expected_countdown <= 0)
+        {
+          schedIndex++;
+          j--;
+          continue;
+        }
+
         String schedule = String(r[busIndex].schedules[schedIndex + j].expected_leave_time) + ", in " + 
                           r[busIndex].schedules[schedIndex + j].expected_countdown + " min";
         String lateness = getTLScheduleStatusString(r[busIndex].schedules[schedIndex + j].schedule_status);

@@ -295,6 +295,7 @@ extern const char *NTP_SERVER_2;
 extern const unsigned long NTP_TIMEOUT;
 extern const long SLEEP_DURATION_OWM;
 extern const long SLEEP_DURATION_TRANSLINK;
+extern const long DATA_RESET_TIME_TRANSLINK;
 extern const long SLEEP_DURATION;
 extern const int BED_TIME;
 extern const int WAKE_TIME;

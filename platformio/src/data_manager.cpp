@@ -22,22 +22,6 @@
 RTC_DATA_ATTR compressed_owm_resp_onecall_t  comp_owm_onecall = {0};
 RTC_DATA_ATTR compressed_tl_resp_rtti_t      comp_translink_rtti_schedules[TRANSLINK_BUSES_DISPLAYED] = {0};
 
-void clearRTCMemorySpace()
-{
-  for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
-  {
-    comp_translink_rtti_schedules[i].valid_schedules = 0;
-    for(int j = 0; j < RTTI_NUM_SCHEDULES; j++)
-    {
-      comp_translink_rtti_schedules[i].schedules[j].tm_yday = 0;
-      comp_translink_rtti_schedules[i].schedules[j].expected_countdown = 0;
-
-      memset(comp_translink_rtti_schedules[i].schedules[j].expected_leave_time, 0, sizeof(comp_translink_rtti_schedules[i].schedules[j].expected_leave_time));
-      comp_translink_rtti_schedules[i].schedules[j].schedule_status = 0;
-    }
-  }
-}
-
 void DataManager::init(tm* currentTime, bool firstBoot)
 {
   // MAKE API REQUESTS
@@ -66,8 +50,6 @@ void DataManager::init(tm* currentTime, bool firstBoot)
         {
             comp_translink_rtti_schedules[i].valid_schedules = 0;
         }
-
-        clearRTCMemorySpace();
     }
     else
     {
@@ -167,6 +149,20 @@ compressed_owm_resp_onecall_t* DataManager::getOpenWeatherMapData()
 
 void DataManager::evalTranslinkDataStale()
 {
+  // Translink data must be refreshed at this interval to ensure
+  // schedule doesn't drift over time
+  if(((currentTime.tm_min % DATA_RESET_TIME_TRANSLINK) * 60ULL
+                    + currentTime.tm_sec) < (SLEEP_DURATION_TRANSLINK * 60ULL))
+  {
+    for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
+    {
+      comp_translink_rtti_schedules[i].valid_schedules = 0;
+    }
+    
+    tlDataStale = true;
+    return;
+  }
+
   // If not enough schedules to display then data stale
   for(int i = 0; i < TRANSLINK_BUSES_DISPLAYED; i++)
   {
@@ -189,8 +185,8 @@ void DataManager::evalOpenWeatherMapDataStale()
     return;
   }
 
-  // If woken by Translink Call time then check to see if also aligns with
-  // OpenWeatherCall
+  // If woken by Translink Call time then check to see if also aligns with OpenWeatherCall
+  // Call are driven by the minutes of the hour not an interval
   if(SLEEP_DURATION_OWM > SLEEP_DURATION_TRANSLINK)
   {
     if(((currentTime.tm_min % SLEEP_DURATION_OWM) * 60ULL

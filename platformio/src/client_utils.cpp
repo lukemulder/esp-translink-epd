@@ -176,7 +176,6 @@ bool waitForSNTPSync(tm *timeInfo)
     httpResponse = http.GET();
     if (httpResponse == HTTP_CODE_OK)
     {
-      Serial.println("HTTP Response OK, attempting deserialize");
       jsonErr = deserializeOneCall(http.getStream(), r);
       if (jsonErr)
       {
